@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.infrastructure.web.api.v1.schemas.orcamento_schema import OrcamentoResponse
+from src.infrastructure.web.api.v1.schemas.orcamento_update_schema import OrcamentoUpdate
 from src.application.budgeting.list_orcamentos import ListarOrcamentosUseCase
-from src.infrastructure.web.api.v1.dependencies import get_listar_orcamentos_use_case
+from src.application.budgeting.editar_orcamento import EditarOrcamentoUseCase
+from src.infrastructure.web.api.v1.dependencies import get_listar_orcamentos_use_case, get_editar_orcamento_use_case
 
 router = APIRouter(prefix="/orcamentos", tags=["orcamentos"])
 
@@ -45,3 +47,42 @@ def listar_orcamentos(
         )
         for b in budgets
     ]
+
+
+@router.put(
+    "/{budget_id}",
+    response_model=OrcamentoResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Edita um orçamento existente",
+)
+def editar_orcamento(
+    budget_id: str,
+    payload: OrcamentoUpdate,
+    user_id: str = Query(..., description="ID do usuário logado (em produção viria do token JWT)"),
+    use_case: EditarOrcamentoUseCase = Depends(get_editar_orcamento_use_case),
+):
+    try:
+        budget = use_case.execute(
+            budget_id=budget_id,
+            user_id=user_id,
+            nome=payload.nome,
+            valor=payload.valor,
+            validade_meses=payload.validade_meses,
+            ativo=payload.ativo,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        ) from exc
+
+    return OrcamentoResponse(
+        id=budget.id,
+        nome=budget.nome,
+        categoria=budget.categoria,
+        valor_restante=float(budget.saldo.amount),
+        valor_planejado=float(budget.limite.amount),
+        data_criacao=budget.created_at,
+    )

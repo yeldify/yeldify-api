@@ -9,6 +9,7 @@ class OrcamentoResponse(BaseModel):
     valor_restante: float
     valor_planejado: float
     data_criacao: date
+    ativo: bool
 
     class Config:
         orm_mode = True
