@@ -44,8 +44,29 @@ def build_repo():
         data=date(2026, 9, 16), descricao="Uber", tipo=TipoLancamento.SAIDA,
         categoria="Transporte",
     ))
+    b_arq = Budget(
+        id="b3",
+        user_id="user-123",
+        nome="Arquivado",
+        categoria="Lazer",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        limite=Money(300.0, "BRL"),
+        _ativo=False,
+    )
+    b_outro = Budget(
+        id="b9",
+        user_id="user-456",
+        nome="Outro Usuário",
+        categoria="Essencial",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        limite=Money(500.0, "BRL"),
+    )
     repo.save(b_alim)
     repo.save(b_transp)
+    repo.save(b_arq)
+    repo.save(b_outro)
     return repo
 
 
@@ -202,3 +223,102 @@ def test_editar_transacao_categoria_invalida_422():
         json={"categoria": " "},
     )
     assert response.status_code == 422
+
+
+# ==================== REALOCAÇÃO ENTRE ORÇAMENTOS ====================
+
+def test_realocar_transacao_success():
+    client = make_app()
+    response = client.patch(
+        "/transacoes/l1",
+        params={"user_id": "user-123"},
+        json={"budget_id": "b2"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "l1"
+    assert data["budget_id"] == "b2"
+    assert data["budget_nome"] == "Transporte"
+    assert data["descricao"] == "Ifood"
+    assert data["valor"] == 85.90
+    # confirma persistência via listagem
+    lista = client.get("/transacoes/", params={"user_id": "user-123"}).json()
+    movida = next(t for t in lista["items"] if t["id"] == "l1")
+    assert movida["budget_id"] == "b2"
+    assert movida["budget_nome"] == "Transporte"
+
+
+def test_realocar_transacao_reflete_saldo_dos_orcamentos():
+    client = make_app()
+    response = client.patch(
+        "/transacoes/l1",
+        params={"user_id": "user-123"},
+        json={"budget_id": "b2"},
+    )
+    assert response.status_code == 200
+    orcs = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "todos", "page_size": 100}).json()["items"]
+    b1 = next(o for o in orcs if o["id"] == "b1")
+    b2 = next(o for o in orcs if o["id"] == "b2")
+    # b1 ficou só com l2 (receita +1200) → gasto 0, valor_restante = limite + 1200
+    assert b1["gasto"] == 0.0
+    assert b1["valor_restante"] == 2700.0
+    # b2 ganhou a despesa l1 (85.90) → gasto 28.50 + 85.90
+    assert round(b2["gasto"], 2) == 114.40
+
+
+def test_realocar_transacao_destino_inativo_400():
+    client = make_app()
+    response = client.patch(
+        "/transacoes/l1",
+        params={"user_id": "user-123"},
+        json={"budget_id": "b3"},
+    )
+    assert response.status_code == 400
+    assert "orçamento inativo" in response.json()["detail"]
+    # transação permanece no orçamento de origem
+    lista = client.get("/transacoes/", params={"user_id": "user-123"}).json()
+    assert next(t for t in lista["items"] if t["id"] == "l1")["budget_id"] == "b1"
+
+
+def test_realocar_transacao_destino_outro_usuario_400():
+    client = make_app()
+    response = client.patch(
+        "/transacoes/l1",
+        params={"user_id": "user-123"},
+        json={"budget_id": "b9"},
+    )
+    assert response.status_code == 400
+    assert "outro usuário" in response.json()["detail"]
+
+
+def test_realocar_transacao_destino_inexistente_400():
+    client = make_app()
+    response = client.patch(
+        "/transacoes/l1",
+        params={"user_id": "user-123"},
+        json={"budget_id": "b-404"},
+    )
+    assert response.status_code == 400
+    assert "não encontrado" in response.json()["detail"]
+
+
+def test_realocar_todas_transacoes_e_arquivar_funciona():
+    # Aceite #10: após realocar todas as transações, arquivar o orçamento vigente passa a funcionar
+    client = make_app()
+    for lanc_id in ("l1", "l2"):
+        response = client.patch(
+            f"/transacoes/{lanc_id}",
+            params={"user_id": "user-123"},
+            json={"budget_id": "b2"},
+        )
+        assert response.status_code == 200
+    assert client.get("/transacoes/", params={"user_id": "user-123"}).json()["total"] == 3
+    arquivar = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"ativo": False},
+    )
+    assert arquivar.status_code == 200
+    assert arquivar.json()["ativo"] is False
+    arq = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "arquivados"}).json()
+    assert "b1" in [b["id"] for b in arq["items"]]

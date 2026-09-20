@@ -29,11 +29,14 @@ class EditarTransacaoUseCase:
         pendente: Optional[bool] = None,
         valor: Optional[float] = None,
         data: Optional[date] = None,
+        budget_id: Optional[str] = None,
     ) -> TransacaoResult:
         if not lancamento_id or not isinstance(lancamento_id, str):
             raise ValueError("lancamento_id must be a non-empty string")
         if not user_id or not isinstance(user_id, str):
             raise ValueError("user_id must be a non-empty string")
+        if budget_id is not None and not isinstance(budget_id, str):
+            raise ValueError("budget_id must be a string")
 
         budget, lancamento = self._find_lancamento(lancamento_id, user_id)
         if budget is None or lancamento is None:
@@ -48,20 +51,35 @@ class EditarTransacaoUseCase:
             valor=valor,
             data=data,
         )
-        if not updates:
+
+        movendo = budget_id is not None and budget_id != budget.id
+        if not updates and not movendo:
             raise ValueError("No fields provided for update")
 
-        novo_lancamento = replace(lancamento, **updates)
-        budget.lancamentos = [
-            novo_lancamento if l.id == lancamento_id else l for l in budget.lancamentos
-        ]
-        self.budget_repository.save(budget)
+        if movendo:
+            destino = self._validar_destino(budget_id, user_id)
+            novo_lancamento = replace(lancamento, budget_id=destino.id, **updates)
+            budget.lancamentos = [
+                l for l in budget.lancamentos if l.id != lancamento_id
+            ]
+            destino.adicionar_lancamento(novo_lancamento)
+            self.budget_repository.save(budget)
+            self.budget_repository.save(destino)
+            budget_final = destino
+        else:
+            novo_lancamento = replace(lancamento, **updates)
+            budget.lancamentos = [
+                novo_lancamento if l.id == lancamento_id else l
+                for l in budget.lancamentos
+            ]
+            self.budget_repository.save(budget)
+            budget_final = budget
 
         return TransacaoResult(
             id=novo_lancamento.id,
-            budget_id=budget.id,
-            budget_nome=budget.nome,
-            budget_categoria=budget.categoria,
+            budget_id=budget_final.id,
+            budget_nome=budget_final.nome,
+            budget_categoria=budget_final.categoria,
             descricao=novo_lancamento.descricao,
             valor=float(novo_lancamento.valor.amount),
             data=novo_lancamento.data,
@@ -71,6 +89,20 @@ class EditarTransacaoUseCase:
             metodo_pagamento=novo_lancamento.metodo_pagamento.value,
             pendente=novo_lancamento.pendente,
         )
+
+    def _validar_destino(self, budget_id: str, user_id: str) -> Budget:
+        destino = self.budget_repository.get(budget_id)
+        if destino is None:
+            raise ValueError("Orçamento de destino não encontrado.")
+        if destino.user_id != user_id:
+            raise ValueError(
+                "Não é possível mover a transação para um orçamento de outro usuário."
+            )
+        if not destino.ativo:
+            raise ValueError(
+                "Não é possível mover a transação para um orçamento inativo (arquivado)."
+            )
+        return destino
 
     @staticmethod
     def _build_updates(

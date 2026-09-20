@@ -15,12 +15,20 @@ class TransacaoUpdate(BaseModel):
     pendente: Optional[bool] = None
     valor: Optional[float] = None
     data: Optional[date] = None
+    budget_id: Optional[str] = None
 
     @field_validator("descricao", "categoria", "conta")
     @classmethod
     def campo_nao_vazio(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not v.strip():
             raise ValueError("campo não pode ser vazio ou apenas espaços")
+        return v.strip() if v is not None else v
+
+    @field_validator("budget_id")
+    @classmethod
+    def budget_id_nao_vazio(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("budget_id não pode ser vazio ou apenas espaços")
         return v.strip() if v is not None else v
 
     @field_validator("valor")
