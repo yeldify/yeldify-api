@@ -335,7 +335,44 @@ def test_editar_orcamento_desativar_com_transacoes_error():
         json={"ativo": False},
     )
     assert response.status_code == 400
-    assert "Cannot deactivate budget while it has transactions" in response.json()["detail"]
+    assert "Não é possível arquivar um orçamento com movimentações dentro da validade" in response.json()["detail"]
+
+
+def test_editar_orcamento_desativar_expirado_com_transacoes_success():
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento Expirado com Transacoes",
+        categoria="Viagem",
+        start_date=hoje - timedelta(days=60),
+        end_date=hoje - timedelta(days=30),
+        limite=Money(1000.0, "BRL"),
+        _ativo=True,
+        created_at=hoje - timedelta(days=60),
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje - timedelta(days=45),
+        descricao="Saida",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"ativo": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["ativo"] is False
+    arquivados = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "arquivados"})
+    assert arquivados.status_code == 200
+    assert [b["id"] for b in arquivados.json()["items"]] == ["b1"]
 
 
 def test_editar_orcamento_desativar_sem_transacoes_success():

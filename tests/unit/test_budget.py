@@ -182,7 +182,7 @@ def test_budget_desativar_com_lancamentos_levanta_excecao():
     )
     budget.adicionar_lancamento(lanc)
     with pytest.raises(BudgetHasTransactionsException):
-        budget.desativar()
+        budget.desativar(data=date(2026, 8, 15))
 
 
 def test_budget_ativo_falso_nao_aceita_lancamentos():
@@ -231,7 +231,34 @@ def test_budget_pode_ser_desativado_fora_validade():
         TipoLancamento.SAIDA,
     )
     budget.adicionar_lancamento(lanc)
-    assert budget.pode_ser_desativado(date.today()) is True  # because expired
+    # Orçamento expirado pode ser arquivado mesmo com movimentações.
+    date_apos_validade = date(2026, 9, 10)
+    assert budget.pode_ser_desativado(date_apos_validade) is True  # because expired
+
+
+def test_budget_desativar_expirado_com_lancamentos_success():
+    # Budget expired (end_date in past) com movimentações pode ser arquivado.
+    budget = Budget(
+        "budget-1",
+        "user-123",
+        "Viagem",
+        "Lazer",
+        date(2026, 6, 1),
+        date(2026, 6, 30),
+        Money(Decimal('1000.00'), 'BRL')
+    )
+    lanc = Lancamento(
+        "lanc-1",
+        budget.id,
+        Money(Decimal('100.00'), 'BRL'),
+        date(2026, 6, 15),
+        "Test",
+        TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    assert budget.ativo is True
+    budget.desativar(data=date(2026, 9, 10))
+    assert budget.ativo is False
 
 
 def test_budget_pode_ser_desativado_dentro_validade_sem_lancamentos():
@@ -244,8 +271,8 @@ def test_budget_pode_ser_desativado_dentro_validade_sem_lancamentos():
         date(2026, 8, 31),
         Money(Decimal('1000.00'), 'BRL')
     )
-    # no lancamentos, dentro da validade (assuming today is within)
-    assert budget.pode_ser_desativado(date.today()) is True
+    # no lancamentos, dentro da validade => pode arquivar
+    assert budget.pode_ser_desativado(date(2026, 8, 15)) is True
 
 
 def test_budget_nao_pode_ser_desativado_dentro_validade_com_lancamentos():
@@ -267,8 +294,8 @@ def test_budget_nao_pode_ser_desativado_dentro_validade_com_lancamentos():
         TipoLancamento.SAIDA,
     )
     budget.adicionar_lancamento(lanc)
-    # dentro validade and tem lancamentos => cannot deactivate
-    assert budget.pode_ser_desativado(date.today()) is False
+    # dentro da validade e tem lancamentos => não pode arquivar
+    assert budget.pode_ser_desativado(date(2026, 8, 15)) is False
 
 
 def test_budget_gasto_soma_apenas_saidas():

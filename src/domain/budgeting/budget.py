@@ -47,12 +47,13 @@ class Budget:
     def ativar(self) -> None:
         self._ativo = True
 
-    def desativar(self) -> None:
-        # Rule: can only deactivate if no transactions (or they have been reassigned)
-        if self.lancamentos:
+    def desativar(self, data: Optional[date] = None) -> None:
+        # Rule: dentro da validade, só pode arquivar sem lançamentos;
+        # expirado pode ser arquivado mesmo com movimentações.
+        if self.lancamentos and self.esta_no_periodo_validade(data or date.today()):
             raise BudgetHasTransactionsException(
-                "Cannot deactivate budget while it has transactions. "
-                "Reassign or remove transactions first."
+                "Não é possível arquivar um orçamento com movimentações dentro da validade. "
+                "Mova as transações para outro orçamento antes de arquivar."
             )
         self._ativo = False
 
@@ -117,6 +118,6 @@ class Budget:
         So if outside validity (expired), they can be deactivated even with transactions?
         We'll implement: can deactivate if (not within validity) or (no lancamentos).
         """
-        if not self.esta_no_periodo_validade(date.today()):
+        if not self.esta_no_periodo_validade(data):
             return True  # expired budgets can be deactivated anytime
         return len(self.lancamentos) == 0
