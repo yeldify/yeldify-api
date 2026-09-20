@@ -145,6 +145,22 @@ python scripts/init_db.py       # cria as tabelas
 
 Para demo via Docker Postgres, ver [POSTGRES_SETUP.md](POSTGRES_SETUP.md).
 
+## Rodando com Docker
+
+```bash
+# Subir a stack completa (PostgreSQL + API + Web) na raiz do workspace:
+docker compose up --build
+# → API: http://localhost:8000/docs  ·  Web: http://localhost:5173
+```
+
+Imagem publicada no **GitHub Container Registry** em todo push em `main` (via `docker-publish.yml`):
+
+```bash
+docker pull ghcr.io/hialth/yeldify-api
+```
+
+O container roda `scripts/init_db.py` antes de subir quando `USE_POSTGRES=true`, e aplica o seed de demo com `SEED_DEMO=true`.
+
 ## Endpoints
 
 | Método | Rota | Descrição |
