@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+Leia também o [`AGENTS.md`](../AGENTS.md) na raiz do workspace: regras de trabalho, definição
+de pronto e como o CI barra.
+
 ## Visão geral
 API de finanças pessoais ("Yeldify API", v0.1.0) construída com **Python 3.11 + FastAPI**,
 focada no módulo de **orçamentos**. Segue arquitetura limpa em camadas
