@@ -79,7 +79,7 @@ def listar_transacoes(
     response_model=TransacaoResponse,
     status_code=status.HTTP_200_OK,
     summary="Edita campos de um lançamento",
-    description="Atualiza campos opcionais (categoria, conta, método de pagamento, pendente, descrição, valor ou data) de um lançamento existente.",
+    description="Atualiza campos opcionais (categoria, conta, método de pagamento, pendente, descrição, valor ou data) de um lançamento existente, ou move a transação para outro orçamento (budget_id).",
 )
 def editar_transacao(
     lancamento_id: str,
@@ -101,6 +101,7 @@ def editar_transacao(
             pendente=payload.pendente,
             valor=payload.valor,
             data=payload.data,
+            budget_id=payload.budget_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

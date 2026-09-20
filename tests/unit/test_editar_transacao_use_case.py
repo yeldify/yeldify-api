@@ -117,3 +117,119 @@ def test_editar_transacao_outro_usuario_nao_encontra():
     use_case = EditarTransacaoUseCase(repo)
     with pytest.raises(ValueError, match="not found"):
         use_case.execute(lancamento_id="l1", user_id="user-456", categoria="X")
+
+
+# ==================== REALOCAÇÃO ENTRE ORÇAMENTOS ====================
+
+def make_repo_dois_orcamentos():
+    repo = make_repo()
+    b2 = Budget(
+        id="b2",
+        user_id="user-123",
+        nome="Transporte",
+        categoria="Essencial",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        limite=Money(500.0, "BRL"),
+    )
+    repo.save(b2)
+    return repo
+
+
+def test_realocar_transacao_para_outro_orcamento_success():
+    repo = make_repo_dois_orcamentos()
+    use_case = EditarTransacaoUseCase(repo)
+    result = use_case.execute(
+        lancamento_id="l1",
+        user_id="user-123",
+        budget_id="b2",
+    )
+    assert result.budget_id == "b2"
+    assert result.budget_nome == "Transporte"
+    # campos da transação preservados
+    assert result.descricao == "Ifood"
+    assert result.valor == 85.90
+    assert result.categoria == "Restaurante"
+    # persistência: origem sem a transação, destino com ela
+    assert repo.get("b1").lancamentos == []
+    assert [l.id for l in repo.get("b2").lancamentos] == ["l1"]
+
+
+def test_realocar_transacao_com_edicao_combinada():
+    repo = make_repo_dois_orcamentos()
+    use_case = EditarTransacaoUseCase(repo)
+    result = use_case.execute(
+        lancamento_id="l1",
+        user_id="user-123",
+        budget_id="b2",
+        categoria="Transporte",
+    )
+    assert result.budget_id == "b2"
+    assert result.categoria == "Transporte"
+    movida = repo.get("b2").lancamentos[0]
+    assert movida.categoria == "Transporte"
+
+
+def test_realocar_transacao_destino_inexistente():
+    repo = make_repo()
+    use_case = EditarTransacaoUseCase(repo)
+    with pytest.raises(ValueError, match="Orçamento de destino não encontrado"):
+        use_case.execute(lancamento_id="l1", user_id="user-123", budget_id="b-404")
+    assert [l.id for l in repo.get("b1").lancamentos] == ["l1"]
+
+
+def test_realocar_transacao_destino_outro_usuario():
+    repo = make_repo()
+    b_outro = Budget(
+        id="b9",
+        user_id="user-456",
+        nome="Outro Usuário",
+        categoria="Essencial",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        limite=Money(500.0, "BRL"),
+    )
+    repo.save(b_outro)
+    use_case = EditarTransacaoUseCase(repo)
+    with pytest.raises(ValueError, match="orçamento de outro usuário"):
+        use_case.execute(lancamento_id="l1", user_id="user-123", budget_id="b9")
+    assert [l.id for l in repo.get("b1").lancamentos] == ["l1"]
+
+
+def test_realocar_transacao_destino_inativo():
+    repo = make_repo()
+    b_arq = Budget(
+        id="b-arq",
+        user_id="user-123",
+        nome="Arquivado",
+        categoria="Lazer",
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        limite=Money(500.0, "BRL"),
+        _ativo=False,
+    )
+    repo.save(b_arq)
+    use_case = EditarTransacaoUseCase(repo)
+    with pytest.raises(ValueError, match="orçamento inativo"):
+        use_case.execute(lancamento_id="l1", user_id="user-123", budget_id="b-arq")
+    assert [l.id for l in repo.get("b1").lancamentos] == ["l1"]
+
+
+def test_realocar_transacao_mesmo_orcamento_sem_campos_erro():
+    repo = make_repo()
+    use_case = EditarTransacaoUseCase(repo)
+    with pytest.raises(ValueError, match="No fields provided"):
+        use_case.execute(lancamento_id="l1", user_id="user-123", budget_id="b1")
+
+
+def test_realocar_transacao_mesmo_orcamento_edita_normalmente():
+    repo = make_repo()
+    use_case = EditarTransacaoUseCase(repo)
+    result = use_case.execute(
+        lancamento_id="l1",
+        user_id="user-123",
+        budget_id="b1",
+        categoria="Alimentação",
+    )
+    assert result.budget_id == "b1"
+    assert result.categoria == "Alimentação"
