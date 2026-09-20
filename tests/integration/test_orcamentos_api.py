@@ -426,12 +426,13 @@ def test_editar_orcamento_saldo_pode_ser_negativo_apos_transacoes():
     response = client.put(
         "/orcamentos/b1",
         params={"user_id": "user-123"},
-        json={"valor": 400.0},
+        json={"valor": 400.0, "nota_governanca": "Ajuste de teto com movimentações existentes"},
     )
     assert response.status_code == 200
     data = response.json()
     # saldo = limite + (entradas - saidas) = 400 + (0 - 600) = -200
     assert data["valor_restante"] == -200.0
+    assert data["nota_governanca"] == "Ajuste de teto com movimentações existentes"
 
 
 # ==================== TESTES PARA CRIAR ORÇAMENTO (POST /orcamentos/) ====================
@@ -671,6 +672,100 @@ def test_listar_orcamentos_pasta_invalida_400():
     client = TestClient(app)
     response = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "invalida"})
     assert response.status_code == 400
+
+
+def test_editar_orcamento_alterar_valor_com_transacoes_sem_justificativa_400():
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje,
+        descricao="Saida",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"valor": 400.0},
+    )
+    assert response.status_code == 400
+    assert "Justificativa obrigatória para alterar orçamento com movimentações" in response.json()["detail"]
+
+
+def test_editar_orcamento_alterar_valor_com_transacoes_e_justificativa_200():
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje,
+        descricao="Saida",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"valor": 400.0, "nota_governanca": "Revisão mensal do teto"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valor_planejado"] == 400.0
+    assert data["nota_governanca"] == "Revisão mensal do teto"
+
+
+def test_editar_orcamento_justificativa_vazia_422():
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(1000.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"nome": "Novo Nome", "nota_governanca": "   "},
+    )
+    assert response.status_code == 422
 
 
 if __name__ == "__main__":

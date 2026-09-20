@@ -26,6 +26,7 @@ class BudgetModel(Base):
     limite_currency = Column(String(3), nullable=False, default="BRL")
     _ativo = Column(Boolean, nullable=False, default=True)
     created_at = Column(Date, nullable=False)
+    nota_governanca = Column(String, nullable=True)
     
     # Relationship to LancamentoModel
     lancamentos = relationship("LancamentoModel", back_populates="budget", cascade="all, delete-orphan")

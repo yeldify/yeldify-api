@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 from src.domain.budgeting.money import Money
 from src.domain.budgeting.lancamento import Lancamento, TipoLancamento
 from src.domain.budgeting.exceptions import BudgetInactiveException, BudgetHasTransactionsException
@@ -19,6 +20,7 @@ class Budget:
     _ativo: bool = True
     lancamentos: list[Lancamento] = field(default_factory=list)
     created_at: date = field(default_factory=date.today)
+    nota_governanca: Optional[str] = None
 
     def __post_init__(self):
         if not self.id or not isinstance(self.id, str):
@@ -39,6 +41,8 @@ class Budget:
             raise ValueError("limite must be a Money instance")
         if not isinstance(self.created_at, date):
             raise ValueError("created_at must be a date instance")
+        if self.nota_governanca is not None and not isinstance(self.nota_governanca, str):
+            raise ValueError("nota_governanca must be a string or None")
 
     @property
     def ativo(self) -> bool:

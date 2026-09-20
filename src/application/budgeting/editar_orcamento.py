@@ -20,6 +20,7 @@ class EditarOrcamentoUseCase:
         valor: float | None = None,
         validade_meses: int | None = None,
         ativo: bool | None = None,
+        nota_governanca: str | None = None,
     ) -> Budget:
         """
         Edit an active budget.
@@ -53,6 +54,11 @@ class EditarOrcamentoUseCase:
             # valor is the limite (planned value)
             if valor < 0:
                 raise ValueError("Valor do orçamento não pode ser menor que zero")
+            # Governance: alterar o teto de um orçamento com movimentações exige justificativa
+            if budget.lancamentos and not nota_governanca:
+                raise ValueError(
+                    "Justificativa obrigatória para alterar orçamento com movimentações."
+                )
             # Ensure it's a Money object with same currency
             # We'll keep the same currency as existing limit (assuming BRL for now)
             budget.limite = Money(valor, budget.limite.currency)
@@ -88,6 +94,13 @@ class EditarOrcamentoUseCase:
                     raise ValueError(str(e)) from e
                 except Exception as e:
                     raise ValueError(str(e)) from e
+            changes_made = True
+
+        if nota_governanca is not None:
+            nota = nota_governanca.strip()
+            if not nota:
+                raise ValueError("Justificativa não pode ser vazia.")
+            budget.nota_governanca = nota
             changes_made = True
 
         # If no changes, just return budget (or could raise? but we'll return)
