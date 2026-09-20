@@ -335,12 +335,46 @@ def test_editar_orcamento_desativar_com_transacoes_error():
     budget.adicionar_lancamento(lanc)
     repo.save(budget)
     use_case = EditarOrcamentoUseCase(repo)
-    with pytest.raises(ValueError, match="Cannot deactivate budget while it has transactions"):
+    with pytest.raises(ValueError, match="Não é possível arquivar um orçamento com movimentações dentro da validade"):
         use_case.execute(
             budget_id="b1",
             user_id="user-123",
             ativo=False,
         )
+
+
+def test_editar_orcamento_desativar_expirado_com_transacoes_success():
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    # orçamento expirado (validade no passado) com movimentações pode ser arquivado
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento Expirado",
+        categoria="Viagem",
+        start_date=hoje - timedelta(days=60),
+        end_date=hoje - timedelta(days=30),
+        limite=Money(1000.0, "BRL"),
+        _ativo=True,
+        created_at=hoje - timedelta(days=60),
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje - timedelta(days=45),
+        descricao="Saida expirado",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    updated = use_case.execute(
+        budget_id="b1",
+        user_id="user-123",
+        ativo=False,
+    )
+    assert updated.ativo is False
 
 
 def test_editar_orcamento_desativar_sem_transacoes_success():
