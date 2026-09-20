@@ -20,6 +20,7 @@ def _to_response(budget) -> OrcamentoResponse:
         gasto=float(budget.gasto.amount),
         data_criacao=budget.created_at,
         ativo=budget.ativo,
+        nota_governanca=budget.nota_governanca,
     )
 
 @router.post(
@@ -131,6 +132,7 @@ def editar_orcamento(
             valor=payload.valor,
             validade_meses=payload.validade_meses,
             ativo=payload.ativo,
+            nota_governanca=payload.nota_governanca,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

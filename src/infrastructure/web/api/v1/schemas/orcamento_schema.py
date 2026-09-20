@@ -11,6 +11,7 @@ class OrcamentoResponse(BaseModel):
     gasto: float
     data_criacao: date
     ativo: bool
+    nota_governanca: Optional[str] = None
 
     class Config:
         orm_mode = True

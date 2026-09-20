@@ -125,6 +125,7 @@ uvicorn src.infrastructure.web.api.v1.api:app --reload
 | limite_currency | VARCHAR(3) | Currency (default: BRL) |
 | _ativo | BOOLEAN | Active status |
 | created_at | DATE | Creation date |
+| nota_governanca | VARCHAR | Justificativa da última alteração com movimentações (nullable) |
 
 #### lancamentos
 
@@ -186,6 +187,13 @@ pip install psycopg2-binary sqlalchemy
 5. Restart the API - existing data will be in PostgreSQL
 
 **Note:** InMemory data is **not migrated automatically**. When you switch to PostgreSQL, start with an empty database.
+
+> **Migration:** if you have an existing `budgets` table (criada antes da coluna `nota_governanca`),
+> adicione a coluna manualmente (*`init_db.py` só cria tabelas novas, não altera existentes*):
+>
+> ```bash
+> psql -h localhost -U postgres -d yeldify -c "ALTER TABLE budgets ADD COLUMN nota_governanca VARCHAR;"
+> ```
 
 ## Files Created/Modified
 

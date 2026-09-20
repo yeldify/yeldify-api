@@ -428,14 +428,141 @@ def test_editar_orcamento_saldo_pode_ser_negativo_apos_transacoes():
         budget_id="b1",
         user_id="user-123",
         valor=400.0,
+        nota_governanca="Ajuste de teto com movimentações existentes",
     )
     # saldo = limite + (entradas - saidas) = 400 + (0 - 600) = -200
     assert updated.saldo.amount == Decimal('-200.0')
+    assert updated.nota_governanca == "Ajuste de teto com movimentações existentes"
 
 
 def test_editar_orcamento_nao_permite_editar_validade_se_expirado_ja_testado():
     # already covered in test_editar_orcamento_validade_expirado_error
     pass
+
+
+def test_editar_orcamento_alterar_valor_com_transacoes_exige_justificativa():
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje,
+        descricao="Saida",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    with pytest.raises(ValueError, match="Justificativa obrigatória para alterar orçamento com movimentações"):
+        use_case.execute(
+            budget_id="b1",
+            user_id="user-123",
+            valor=400.0,
+        )
+
+
+def test_editar_orcamento_alterar_valor_com_transacoes_e_justificativa_success():
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    lanc = Lancamento(
+        id="l1",
+        budget_id=budget.id,
+        valor=Money(200.0, "BRL"),
+        data=hoje,
+        descricao="Saida",
+        tipo=TipoLancamento.SAIDA,
+    )
+    budget.adicionar_lancamento(lanc)
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    updated = use_case.execute(
+        budget_id="b1",
+        user_id="user-123",
+        valor=400.0,
+        nota_governanca="  Redução de teto após revisão mensal  ",
+    )
+    assert updated.limite.amount == Decimal('400.0')
+    assert updated.nota_governanca == "Redução de teto após revisão mensal"
+
+
+def test_editar_orcamento_alterar_valor_sem_transacoes_nao_exige_justificativa():
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    updated = use_case.execute(
+        budget_id="b1",
+        user_id="user-123",
+        valor=400.0,
+    )
+    assert updated.limite.amount == Decimal('400.0')
+    assert updated.nota_governanca is None
+
+
+def test_editar_orcamento_justificativa_vazia_error():
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    with pytest.raises(ValueError, match="Justificativa não pode ser vazia"):
+        use_case.execute(
+            budget_id="b1",
+            user_id="user-123",
+            valor=400.0,
+            nota_governanca="   ",
+        )
+    with pytest.raises(ValueError, match="Justificativa não pode ser vazia"):
+        use_case.execute(
+            budget_id="b1",
+            user_id="user-123",
+            nome="Novo Nome",
+            nota_governanca="   ",
+        )
 
 
 def test_editar_orcamento_campos_obrigatorios_vazio_error():

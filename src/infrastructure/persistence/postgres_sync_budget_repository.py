@@ -58,6 +58,7 @@ class PostgresSyncBudgetRepository(IBudgetRepository):
             limite_currency=budget.limite.currency,
             _ativo=budget._ativo,
             created_at=budget.created_at,
+            nota_governanca=budget.nota_governanca,
             lancamentos=[
                 LancamentoModel(
                     id=l.id,
@@ -110,6 +111,7 @@ class PostgresSyncBudgetRepository(IBudgetRepository):
             _ativo=model._ativo,
             lancamentos=lancamentos,
             created_at=model.created_at,
+            nota_governanca=model.nota_governanca,
         )
     
     def get(self, budget_id: str) -> Optional[Budget]:
@@ -156,6 +158,7 @@ class PostgresSyncBudgetRepository(IBudgetRepository):
                 model.limite_currency = budget.limite.currency
                 model._ativo = budget._ativo
                 model.created_at = budget.created_at
+                model.nota_governanca = budget.nota_governanca
                 
                 # Add new lancamentos
                 for l in budget.lancamentos:
