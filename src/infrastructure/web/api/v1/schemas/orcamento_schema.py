@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 class OrcamentoResponse(BaseModel):
     id: str
@@ -8,8 +8,19 @@ class OrcamentoResponse(BaseModel):
     categoria: str
     valor_restante: float
     valor_planejado: float
+    gasto: float
     data_criacao: date
     ativo: bool
+
+    class Config:
+        orm_mode = True
+
+
+class OrcamentoListResponse(BaseModel):
+    items: List[OrcamentoResponse]
+    total: int
+    page: int
+    page_size: int
 
     class Config:
         orm_mode = True

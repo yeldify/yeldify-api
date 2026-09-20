@@ -269,3 +269,56 @@ def test_budget_nao_pode_ser_desativado_dentro_validade_com_lancamentos():
     budget.adicionar_lancamento(lanc)
     # dentro validade and tem lancamentos => cannot deactivate
     assert budget.pode_ser_desativado(date.today()) is False
+
+
+def test_budget_gasto_soma_apenas_saidas():
+    budget = Budget(
+        "budget-1",
+        "user-123",
+        "Alimentação",
+        "Essencial",
+        date(2026, 8, 1),
+        date(2026, 8, 31),
+        Money(Decimal('1000.00'), 'BRL')
+    )
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-1", budget.id, Money(Decimal('100.00'), 'BRL'),
+        date(2026, 8, 15), "Saída A", TipoLancamento.SAIDA,
+    ))
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-2", budget.id, Money(Decimal('50.00'), 'BRL'),
+        date(2026, 8, 16), "Saída B", TipoLancamento.SAIDA,
+    ))
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-3", budget.id, Money(Decimal('200.00'), 'BRL'),
+        date(2026, 8, 17), "Entrada", TipoLancamento.ENTRADA,
+    ))
+    assert budget.gasto == Money(Decimal('150.00'), 'BRL')
+    assert budget.saldo == Money(Decimal('1050.00'), 'BRL')  # 1000 + 200 - 150
+
+
+def test_budget_gasto_no_periodo_filtra_por_data():
+    budget = Budget(
+        "budget-1",
+        "user-123",
+        "Alimentação",
+        "Essencial",
+        date(2026, 8, 1),
+        date(2026, 12, 31),
+        Money(Decimal('1000.00'), 'BRL')
+    )
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-1", budget.id, Money(Decimal('100.00'), 'BRL'),
+        date(2026, 8, 15), "Em agosto", TipoLancamento.SAIDA,
+    ))
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-2", budget.id, Money(Decimal('40.00'), 'BRL'),
+        date(2026, 9, 10), "Em setembro", TipoLancamento.SAIDA,
+    ))
+    budget.adicionar_lancamento(Lancamento(
+        "lanc-3", budget.id, Money(Decimal('30.00'), 'BRL'),
+        date(2026, 9, 11), "Receita em setembro", TipoLancamento.ENTRADA,
+    ))
+    inicio, fim = date(2026, 9, 1), date(2026, 10, 1)
+    assert budget.gasto_no_periodo(inicio, fim) == Money(Decimal('40.00'), 'BRL')
+    assert budget.receita_no_periodo(inicio, fim) == Money(Decimal('30.00'), 'BRL')

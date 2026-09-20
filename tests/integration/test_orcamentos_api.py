@@ -367,7 +367,8 @@ def test_editar_orcamento_desativar_sem_transacoes_success():
     assert list_response.status_code == 200
     data_list = list_response.json()
     # The budget should not be in the list because it's now inactive.
-    assert len(data_list) == 0
+    assert data_list["items"] == []
+    assert data_list["total"] == 0
 
 
 def test_editar_orcamento_nao_altera_categoria():
@@ -431,6 +432,245 @@ def test_editar_orcamento_saldo_pode_ser_negativo_apos_transacoes():
     data = response.json()
     # saldo = limite + (entradas - saidas) = 400 + (0 - 600) = -200
     assert data["valor_restante"] == -200.0
+
+
+# ==================== TESTES PARA CRIAR ORÇAMENTO (POST /orcamentos/) ====================
+
+def test_criar_orcamento_success():
+    """Test successful budget creation via API."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 1000.0,
+            "validade_meses": 1,
+        },
+    )
+    
+    assert response.status_code == 201
+    data = response.json()
+    
+    # Verify all required fields are present
+    assert "id" in data
+    assert data["nome"] == "Alimentação"
+    assert data["categoria"] == "Essencial"
+    assert data["valor_planejado"] == 1000.0
+    assert data["valor_restante"] == 1000.0
+    assert "data_criacao" in data
+    assert data["ativo"] is True  # Verify ativo field is present and correct
+
+
+def test_criar_orcamento_missing_fields():
+    """Test budget creation with missing required fields."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    # Missing nome
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "categoria": "Essencial",
+            "valor": 1000.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response.status_code == 422  # Pydantic validation error
+
+
+def test_criar_orcamento_invalid_valor_negativo():
+    """Test budget creation with negative valor."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": -100.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response.status_code == 400
+    assert "valor must be positive" in response.json()["detail"]
+
+
+def test_criar_orcamento_invalid_valor_zero():
+    """Test budget creation with zero valor."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 0.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response.status_code == 400
+    assert "valor must be positive" in response.json()["detail"]
+
+
+def test_criar_orcamento_invalid_validade_meses():
+    """Test budget creation with invalid validade_meses."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    # validade_meses must be in [1, 2, 3, 6, 9, 12]
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 1000.0,
+            "validade_meses": 5,  # Invalid
+        },
+    )
+    assert response.status_code == 400
+    assert "validade_meses must be one of" in response.json()["detail"]
+
+
+def test_criar_orcamento_response_includes_ativo():
+    """Test that budget creation response includes the ativo field."""
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([])
+    client = TestClient(app)
+    
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Teste",
+            "categoria": "Teste",
+            "valor": 500.0,
+            "validade_meses": 1,
+        },
+    )
+    
+    assert response.status_code == 201
+    data = response.json()
+    
+    # Verify ativo field exists and is True for new budgets
+    assert "ativo" in data
+    assert data["ativo"] is True
+
+
+def test_criar_orcamento_listar_includes_new_budget():
+    """Test that created budget appears in list."""
+    hoje = date.today()
+    # Repositório compartilhado entre requests (o default do override cria um
+    # novo por request, o que não persistiria o orçamento criado no POST).
+    repo = InMemoryBudgetRepository()
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = lambda: repo
+    client = TestClient(app)
+    
+    # Create a budget
+    create_response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Novo Orçamento",
+            "categoria": "Essencial",
+            "valor": 1500.0,
+            "validade_meses": 2,
+        },
+    )
+    assert create_response.status_code == 201
+    created_budget_id = create_response.json()["id"]
+    
+    # List budgets for the user
+    list_response = client.get(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+    )
+    assert list_response.status_code == 200
+    data = list_response.json()
+    budgets = data["items"]
+    
+    # Verify the created budget is in the list
+    assert data["total"] == 1
+    assert len(budgets) == 1
+    assert budgets[0]["id"] == created_budget_id
+    assert budgets[0]["nome"] == "Novo Orçamento"
+    assert budgets[0]["ativo"] is True
+
+
+# ==================== TESTES LISTAGEM COM ARQUIVADOS ====================
+
+def test_listar_orcamentos_pasta_arquivados():
+    hoje = date.today()
+    ativo = Budget(
+        id="b-ativo",
+        user_id="user-123",
+        nome="Ativo",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+    )
+    arquivado = Budget(
+        id="b-arq",
+        user_id="user-123",
+        nome="Arquivado",
+        categoria="Lazer",
+        start_date=hoje - timedelta(days=60),
+        end_date=hoje - timedelta(days=30),
+        limite=Money(300.0, "BRL"),
+        _ativo=False,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([ativo, arquivado])
+    client = TestClient(app)
+
+    res_ativos = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "ativos"})
+    assert res_ativos.status_code == 200
+    assert [b["id"] for b in res_ativos.json()["items"]] == ["b-ativo"]
+
+    res_arquivados = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "arquivados"})
+    assert res_arquivados.status_code == 200
+    assert [b["id"] for b in res_arquivados.json()["items"]] == ["b-arq"]
+    assert res_arquivados.json()["items"][0]["ativo"] is False
+
+    res_todos = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "todos"})
+    assert res_todos.status_code == 200
+    assert {b["id"] for b in res_todos.json()["items"]} == {"b-ativo", "b-arq"}
+
+
+def test_listar_orcamentos_pasta_invalida_400():
+    today = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=today,
+        end_date=today + timedelta(days=30),
+        limite=Money(1000.0, "BRL"),
+        _ativo=True,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.get("/orcamentos/", params={"user_id": "user-123", "pasta": "invalida"})
+    assert response.status_code == 400
 
 
 if __name__ == "__main__":

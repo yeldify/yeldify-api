@@ -73,6 +73,31 @@ class Budget:
                 total -= lanc.valor
         return self.limite + total  # limite + (entradas - saídas)
 
+    @property
+    def gasto(self) -> Money:
+        """Sum of SAIDA lancamentos (expenses)."""
+        total = Money(Decimal('0'), self.limite.currency)
+        for lanc in self.lancamentos:
+            if lanc.tipo == TipoLancamento.SAIDA:
+                total += lanc.valor
+        return total
+
+    def gasto_no_periodo(self, inicio: date, fim: date) -> Money:
+        """Sum of SAIDA lancamentos whose `data` falls within [inicio, fim) range."""
+        total = Money(Decimal('0'), self.limite.currency)
+        for lanc in self.lancamentos:
+            if lanc.tipo == TipoLancamento.SAIDA and inicio <= lanc.data < fim:
+                total += lanc.valor
+        return total
+
+    def receita_no_periodo(self, inicio: date, fim: date) -> Money:
+        """Sum of ENTRADA lancamentos whose `data` falls within [inicio, fim) range."""
+        total = Money(Decimal('0'), self.limite.currency)
+        for lanc in self.lancamentos:
+            if lanc.tipo == TipoLancamento.ENTRADA and inicio <= lanc.data < fim:
+                total += lanc.valor
+        return total
+
     def esta_no_periodo_validade(self, data: date) -> bool:
         return self.start_date <= data <= self.end_date
 

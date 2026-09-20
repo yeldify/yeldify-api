@@ -29,7 +29,8 @@ def test_listar_orcamentos_empty():
     repo = InMemoryBudgetRepository()
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123")
-    assert result == []
+    assert result.items == []
+    assert result.total == 0
 
 
 def test_listar_orcamentos_single():
@@ -38,9 +39,10 @@ def test_listar_orcamentos_single():
     repo.save(budget)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123")
-    assert len(result) == 1
-    assert result[0].id == "b1"
-    assert result[0].nome == "Alimentação"
+    assert len(result.items) == 1
+    assert result.total == 1
+    assert result.items[0].id == "b1"
+    assert result.items[0].nome == "Alimentação"
 
 
 def test_listar_orcamentos_multiple_default_sort_by_nome():
@@ -53,19 +55,15 @@ def test_listar_orcamentos_multiple_default_sort_by_nome():
         repo.save(b)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123")
-    assert [b.nome for b in result] == ["Alpha", "Charlie", "Delta"]
+    assert [b.nome for b in result.items] == ["Alpha", "Charlie", "Delta"]
+    assert result.total == 3
 
 
 def test_listar_orcamentos_sort_by_valor_restante():
     repo = InMemoryBudgetRepository()
-    # Create budgets with different saldo (we need to add lancamentos to affect saldo)
     b1 = make_budget("b1", "A", "Essencial", 1000.0)
     b2 = make_budget("b2", "B", "Essencial", 1000.0)
     b3 = make_budget("b3", "C", "Essencial", 1000.0)
-    # Add lancamentos to change saldo
-    # b1: no lancamentos => saldo = 1000
-    # b2: entrada 200 => saldo = 1200
-    # b3: saida 300 => saldo = 700
     lanc_entry = Lancamento(
         id="l1",
         budget_id=b2.id,
@@ -89,9 +87,8 @@ def test_listar_orcamentos_sort_by_valor_restante():
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123", sort_by="valor_restante")
     # Expected order by saldo ascending: b3 (700), b1 (1000), b2 (1200)
-    assert [b.saldo.amount for b in result] == [Decimal('700'), Decimal('1000'), Decimal('1200')]
-    # Verify names correspond
-    assert [b.nome for b in result] == ["C", "A", "B"]
+    assert [b.saldo.amount for b in result.items] == [Decimal('700'), Decimal('1000'), Decimal('1200')]
+    assert [b.nome for b in result.items] == ["C", "A", "B"]
 
 
 def test_listar_orcamentos_sort_by_valor_planejado():
@@ -103,13 +100,12 @@ def test_listar_orcamentos_sort_by_valor_planejado():
         repo.save(b)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123", sort_by="valor_planejado")
-    assert [b.limite.amount for b in result] == [Decimal('500'), Decimal('1000'), Decimal('1500')]
-    assert [b.nome for b in result] == ["Low", "Medium", "High"]
+    assert [b.limite.amount for b in result.items] == [Decimal('500'), Decimal('1000'), Decimal('1500')]
+    assert [b.nome for b in result.items] == ["Low", "Medium", "High"]
 
 
 def test_listar_orcamentos_sort_by_data_criacao():
     repo = InMemoryBudgetRepository()
-    # Create budgets with different creation dates (days ago)
     oldest = make_budget("b1", "Oldest", "Essencial", 100.0, days_ago=20)
     middle = make_budget("b2", "Middle", "Essencial", 200.0, days_ago=10)
     newest = make_budget("b3", "Newest", "Essencial", 300.0, days_ago=0)
@@ -117,31 +113,28 @@ def test_listar_orcamentos_sort_by_data_criacao():
         repo.save(b)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123", sort_by="data_criacao")
-    # Expected oldest first (smallest date) -> newest last
-    assert [b.nome for b in result] == ["Oldest", "Middle", "Newest"]
-    # Verify dates are increasing
-    assert result[0].created_at <= result[1].created_at <= result[2].created_at
+    assert [b.nome for b in result.items] == ["Oldest", "Middle", "Newest"]
+    assert result.items[0].created_at <= result.items[1].created_at <= result.items[2].created_at
 
 
 def test_listar_orcamentos_pagination():
     repo = InMemoryBudgetRepository()
-    # Create 15 budgets with names ensuring alphabetical order is predictable
     for i in range(15):
-        nome = f"Budget {i:02d}"  # "Budget 00", "Budget 01", ... "Budget 14"
+        nome = f"Budget {i:02d}"
         budget = make_budget(f"bid{i}", nome, "Essencial", 100.0 + i)
         repo.save(budget)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
-    # Page 1, size 10 -> first 10
     page1 = use_case.execute(user_id="user-123", page=1, page_size=10)
-    assert len(page1) == 10
-    assert [b.nome for b in page1] == [f"Budget {i:02d}" for i in range(10)]
-    # Page 2, size 10 -> next 5 (since total 15)
+    assert len(page1.items) == 10
+    assert page1.total == 15
+    assert [b.nome for b in page1.items] == [f"Budget {i:02d}" for i in range(10)]
     page2 = use_case.execute(user_id="user-123", page=2, page_size=10)
-    assert len(page2) == 5
-    assert [b.nome for b in page2] == [f"Budget {i:02d}" for i in range(10, 15)]
-    # Page 3 -> empty
+    assert len(page2.items) == 5
+    assert page2.total == 15
+    assert [b.nome for b in page2.items] == [f"Budget {i:02d}" for i in range(10, 15)]
     page3 = use_case.execute(user_id="user-123", page=3, page_size=10)
-    assert page3 == []
+    assert page3.items == []
+    assert page3.total == 15
 
 
 def test_listar_orcamentos_inactive_not_included():
@@ -152,8 +145,9 @@ def test_listar_orcamentos_inactive_not_included():
     repo.save(inactive_budget)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
     result = use_case.execute(user_id="user-123")
-    assert len(result) == 1
-    assert result[0].id == "active"
+    assert len(result.items) == 1
+    assert result.total == 1
+    assert result.items[0].id == "active"
 
 
 def test_listar_orcamentos_invalid_page_page_size():
@@ -179,6 +173,5 @@ def test_listar_orcamentos_sort_by_invalid_field_fallback_to_nome():
     repo.save(b1)
     repo.save(b2)
     use_case = ListarOrcamentosUseCase(budget_repository=repo)
-    # Provide an invalid sort_by; should fall back to nome (alphabetical)
     result = use_case.execute(user_id="user-123", sort_by="invalid_field")
-    assert [b.nome for b in result] == ["Apple", "Zebra"]
+    assert [b.nome for b in result.items] == ["Apple", "Zebra"]
