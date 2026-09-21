@@ -80,11 +80,36 @@ def test_editar_orcamento_success_valor_negativo_limite():
     )
     repo.save(budget)
     use_case = EditarOrcamentoUseCase(repo)
-    with pytest.raises(ValueError, match="Valor do orçamento não pode ser menor que zero"):
+    with pytest.raises(ValueError, match="Valor do orçamento deve ser maior que zero"):
         use_case.execute(
             budget_id="b1",
             user_id="user-123",
             valor=-10.0,
+        )
+
+
+def test_editar_orcamento_success_valor_zero_limite():
+    # AC (api-12): valor 0 é aceito na edição — deve ser rejeitado como <= 0.
+    repo = InMemoryBudgetRepository()
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(100.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    repo.save(budget)
+    use_case = EditarOrcamentoUseCase(repo)
+    with pytest.raises(ValueError, match="Valor do orçamento deve ser maior que zero"):
+        use_case.execute(
+            budget_id="b1",
+            user_id="user-123",
+            valor=0.0,
         )
 
 
