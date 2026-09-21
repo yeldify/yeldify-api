@@ -101,7 +101,32 @@ def test_editar_orcamento_success_valor_negativo_limite():
         json={"valor": -10.0},
     )
     assert response.status_code == 400
-    assert "Valor do orçamento não pode ser menor que zero" in response.json()["detail"]
+    assert "Valor do orçamento deve ser maior que zero" in response.json()["detail"]
+
+
+def test_editar_orcamento_valor_zero_error():
+    hoje = date.today()
+    budget = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Orçamento",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=True,
+        created_at=hoje,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([budget])
+    client = TestClient(app)
+    response = client.put(
+        "/orcamentos/b1",
+        params={"user_id": "user-123"},
+        json={"valor": 0.0},
+    )
+    assert response.status_code == 400
+    assert "Valor do orçamento deve ser maior que zero" in response.json()["detail"]
 
 
 def test_editar_orcamento_success_validade():

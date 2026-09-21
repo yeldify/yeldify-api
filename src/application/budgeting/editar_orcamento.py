@@ -52,8 +52,8 @@ class EditarOrcamentoUseCase:
 
         if valor is not None:
             # valor is the limite (planned value)
-            if valor < 0:
-                raise ValueError("Valor do orçamento não pode ser menor que zero")
+            if valor <= 0:
+                raise ValueError("Valor do orçamento deve ser maior que zero")
             # Governance: alterar o teto de um orçamento com movimentações exige justificativa
             if budget.lancamentos and not nota_governanca:
                 raise ValueError(
