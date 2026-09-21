@@ -42,6 +42,10 @@ class CriarOrcamentoUseCase:
         if not user_id or not isinstance(user_id, str):
             raise ValueError("user_id must be a non-empty string")
 
+        # 1.5 Check duplicate name per user (active or archived)
+        if self._budget_with_same_name_exists(user_id=user_id, nome=nome.strip()):
+            raise ValueError("Já existe um orçamento com este nome")
+
         # 2. Calculate dates
         start_date = date.today()
         # Approximate month as 30 days; for production use relativedelta or calendar
@@ -62,6 +66,16 @@ class CriarOrcamentoUseCase:
         self.budget_repository.save(budget)
 
         return budget
+
+    def _budget_with_same_name_exists(self, user_id: str, nome: str) -> bool:
+        """
+        Check if there is already a budget (active or archived) with the
+        same name for the user. Spec: "Não pode haver 2 orçamentos com mesmo nome".
+        """
+        for b in self.budget_repository.list_by_user_id(user_id, ativo=None):
+            if b.nome == nome:
+                return True
+        return False
 
     @staticmethod
     def _generate_id() -> str:
