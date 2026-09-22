@@ -26,6 +26,7 @@ services:
         value: "true"
       - key: ALLOWED_ORIGINS
         value: https://yeldify-web.onrender.com
-      - fromDatabase:
+      - key: DATABASE_URL
+        fromDatabase:
           name: yeldify-db
           property: connectionString
