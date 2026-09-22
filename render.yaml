@@ -1,0 +1,31 @@
+# Render Blueprint — implanta PostgreSQL + API num clique.
+# Uso: conectar o repo hialth/yeldify-api no Render e criar com "type: Blueprint".
+# Planos: db = starter (pago, o free do Postgres foi descontinuado); api = free (spins down ociosa).
+# Se criar em outra região (ex.: Frankfurt), o domínio da API muda para yeldify-api-<regiao>.onrender.com
+# e é preciso atualizar ALLOWED_ORIGINS (e o VITE_API_URL do front).
+
+databases:
+  - name: yeldify-db
+    databaseName: yeldify
+    user: yeldify
+    plan: starter
+
+services:
+  - type: web
+    name: yeldify-api
+    runtime: python
+    plan: free
+    autoDeploy: true
+    buildCommand: pip install -r requirements/base.txt
+    startCommand: python scripts/init_db.py && uvicorn src.infrastructure.web.api.v1.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /transacoes/
+    envVars:
+      - key: USE_POSTGRES
+        value: "true"
+      - key: SEED_DEMO
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: https://yeldify-web.onrender.com
+      - fromDatabase:
+          name: yeldify-db
+          property: connectionString

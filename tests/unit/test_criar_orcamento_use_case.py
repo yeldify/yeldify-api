@@ -106,3 +106,66 @@ def test_criar_orcamento_invalid_user_id():
             validade_meses=3,
             user_id="",
         )
+
+
+def test_criar_orcamento_duplicate_name_error():
+    repo = InMemoryBudgetRepository()
+    use_case = CriarOrcamentoUseCase(budget_repository=repo)
+    use_case.execute(
+        nome="Alimentação",
+        categoria="Essencial",
+        valor=1000.0,
+        validade_meses=3,
+        user_id="user-123",
+    )
+    with pytest.raises(ValueError, match="Já existe um orçamento com este nome"):
+        use_case.execute(
+            nome="Alimentação",
+            categoria="Essencial",
+            valor=2000.0,
+            validade_meses=3,
+            user_id="user-123",
+        )
+
+
+def test_criar_orcamento_duplicate_name_archived_error():
+    repo = InMemoryBudgetRepository()
+    use_case = CriarOrcamentoUseCase(budget_repository=repo)
+    use_case.execute(
+        nome="Viagem",
+        categoria="Lazer",
+        valor=1000.0,
+        validade_meses=3,
+        user_id="user-123",
+    )
+    budget = repo.list_by_user_id("user-123", ativo=None)[0]
+    budget.desativar()
+    with pytest.raises(ValueError, match="Já existe um orçamento com este nome"):
+        use_case.execute(
+            nome="Viagem",
+            categoria="Lazer",
+            valor=2000.0,
+            validade_meses=3,
+            user_id="user-123",
+        )
+
+
+def test_criar_orcamento_same_name_different_users_success():
+    repo = InMemoryBudgetRepository()
+    use_case = CriarOrcamentoUseCase(budget_repository=repo)
+    use_case.execute(
+        nome="Alimentação",
+        categoria="Essencial",
+        valor=1000.0,
+        validade_meses=3,
+        user_id="user-123",
+    )
+    budget = use_case.execute(
+        nome="Alimentação",
+        categoria="Essencial",
+        valor=1500.0,
+        validade_meses=3,
+        user_id="user-456",
+    )
+    assert budget.user_id == "user-456"
+    assert budget.nome == "Alimentação"

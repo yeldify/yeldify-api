@@ -675,6 +675,118 @@ def test_criar_orcamento_listar_includes_new_budget():
     assert budgets[0]["ativo"] is True
 
 
+# ==================== TESTES NOME DUPLICADO NA CRIAÇÃO ====================
+
+def test_criar_orcamento_duplicate_name_400():
+    hoje = date.today()
+    existente = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Alimentação",
+        categoria="Essencial",
+        start_date=hoje,
+        end_date=hoje + timedelta(days=30),
+        limite=Money(1000.0, "BRL"),
+        _ativo=True,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([existente])
+    client = TestClient(app)
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 1000.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response.status_code == 400
+    assert "Já existe um orçamento com este nome" in response.json()["detail"]
+
+
+def test_criar_orcamento_duplicate_name_arquivado_400():
+    hoje = date.today()
+    arquivado = Budget(
+        id="b1",
+        user_id="user-123",
+        nome="Viagem",
+        categoria="Lazer",
+        start_date=hoje - timedelta(days=60),
+        end_date=hoje - timedelta(days=30),
+        limite=Money(500.0, "BRL"),
+        _ativo=False,
+    )
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = override_get_budget_repository_with_budgets([arquivado])
+    client = TestClient(app)
+    response = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Viagem",
+            "categoria": "Lazer",
+            "valor": 500.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response.status_code == 400
+    assert "Já existe um orçamento com este nome" in response.json()["detail"]
+
+
+def test_criar_orcamento_same_name_different_users_201():
+    repo = InMemoryBudgetRepository()
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = lambda: repo
+    client = TestClient(app)
+
+    response1 = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-123"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 1000.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response1.status_code == 201
+
+    response2 = client.post(
+        "/orcamentos/",
+        params={"user_id": "user-456"},
+        json={
+            "nome": "Alimentação",
+            "categoria": "Essencial",
+            "valor": 1500.0,
+            "validade_meses": 1,
+        },
+    )
+    assert response2.status_code == 201
+    assert response2.json()["nome"] == "Alimentação"
+
+
+def test_criar_orcamento_duplicate_name_mesmo_usuario_201_depois_400():
+    repo = InMemoryBudgetRepository()
+    app = create_app()
+    app.dependency_overrides[get_budget_repository] = lambda: repo
+    client = TestClient(app)
+
+    payload = {
+        "nome": "Alimentação",
+        "categoria": "Essencial",
+        "valor": 1000.0,
+        "validade_meses": 1,
+    }
+    first = client.post("/orcamentos/", params={"user_id": "user-123"}, json=payload)
+    assert first.status_code == 201
+
+    second = client.post("/orcamentos/", params={"user_id": "user-123"}, json=payload)
+    assert second.status_code == 400
+    assert "Já existe um orçamento com este nome" in second.json()["detail"]
+
+
 # ==================== TESTES LISTAGEM COM ARQUIVADOS ====================
 
 def test_listar_orcamentos_pasta_arquivados():
