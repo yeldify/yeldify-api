@@ -1,6 +1,6 @@
 # Render Blueprint — implanta PostgreSQL + API num clique.
 # Uso: conectar o repo hialth/yeldify-api no Render e criar com "type: Blueprint".
-# Planos: db = starter (pago, o free do Postgres foi descontinuado); api = free (spins down ociosa).
+# Planos: db e api = free (ambos hibernam ociosos — primeiro acesso demora ~30s).
 # Se criar em outra região (ex.: Frankfurt), o domínio da API muda para yeldify-api-<regiao>.onrender.com
 # e é preciso atualizar ALLOWED_ORIGINS (e o VITE_API_URL do front).
 
@@ -8,7 +8,7 @@ databases:
   - name: yeldify-db
     databaseName: yeldify
     user: yeldify
-    plan: starter
+    plan: free
 
 services:
   - type: web
